@@ -27,7 +27,10 @@ function extractMonto(text: string): { monto: string; detectado: boolean } {
 
 function extractReferencia(text: string): { ref: string; detectado: boolean } {
   const patterns = [
-    /(?:n[uú]mero\s+de\s+)?(?:referencia|ref\.?|comprobante|confirmaci[oó]n|operaci[oó]n|n[uú]mero)[:\s#]+([A-Z0-9\-]{6,20})/i,
+    // Label explícito seguido de dígitos (solo números, no palabras como "Exitosa")
+    /n[uú]mero\s+de\s+referencia[:\s\n]+([0-9]{6,20})/i,
+    /(?:referencia|ref\.?|comprobante|confirmaci[oó]n)[:\s#\n]+([0-9]{6,20})/i,
+    // Número largo suelto como fallback
     /\b([0-9]{8,20})\b/,
   ];
   for (const p of patterns) {
@@ -69,8 +72,14 @@ function extractFecha(text: string): { fecha: string; detectado: boolean } {
 }
 
 function extractConcepto(text: string): { concepto: string; detectado: boolean } {
-  const m = text.match(/(?:concepto|descripci[oó]n|motivo|por)[:\s]+([^\n]{3,80})/i);
-  if (m) return { concepto: m[1].trim(), detectado: true };
+  // Primero busca el label en la misma línea con dos puntos
+  const sameLine = text.match(/(?:concepto|descripci[oó]n|motivo)[:\s]+([^\n]{2,80})/i);
+  if (sameLine) return { concepto: sameLine[1].trim(), detectado: true };
+
+  // Banesco y otros ponen el concepto en la línea siguiente al label
+  const nextLine = text.match(/(?:concepto|descripci[oó]n|motivo)\s*\n([^\n]{2,80})/i);
+  if (nextLine) return { concepto: nextLine[1].trim(), detectado: true };
+
   return { concepto: "S/C", detectado: false };
 }
 

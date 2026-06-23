@@ -96,20 +96,24 @@ export function detectBankDestino(text: string): string | null {
       return acc.banco;
     }
 
-    // Sufijo enmascarado de 4 dígitos: "****8955" o "* * * * 8 9 5 5"
+    // Sufijo enmascarado de 4 dígitos bajo el label "NÚMERO DE CUENTA"
+    // Tesseract puede renderizar **** como ****, xxxx, ----  u omitirlos
+    // Solo nos interesa el sufijo numérico que venga después del label destino
     const sufijo4 = cuentaNorm.slice(-4);
-    const maskedPattern = new RegExp(`\\*{2,4}\\s*${sufijo4}`, "i");
+
+    // Busca "número de cuenta" (destino) seguido de cualquier cosa y luego los 4 dígitos
+    const cuentaDestinoBlock = text.match(
+      /n[uú]mero\s+de\s+cuenta[\s\S]{0,30}?(\d{4})/i
+    );
+    if (cuentaDestinoBlock && cuentaDestinoBlock[1] === sufijo4) {
+      return acc.banco;
+    }
+
+    // Fallback: los 4 dígitos aparecen después de cualquier secuencia de enmascaramiento
+    // [*x\-\.]{2,} cubre ****, xxxx, ----, ....
+    const maskedPattern = new RegExp(`[*x\\-\\.]{2,}\\s*${sufijo4}\\b`, "i");
     if (maskedPattern.test(text)) {
-      // Asegurarse de que aparece bajo "número de cuenta" y no en "desde mi cuenta"
-      const cuentaDestinoMatch = text.match(
-        /n[uú]mero\s+de\s+cuenta[^\n]*\n([^\n]+)/i
-      );
-      if (cuentaDestinoMatch && cuentaDestinoMatch[1].includes(sufijo4)) {
-        return acc.banco;
-      }
-      // Si no hay contexto claro, igual lo usamos si solo hay una coincidencia
-      const allMatches = [...text.matchAll(new RegExp(`\\*{2,4}\\s*${sufijo4}`, "gi"))];
-      if (allMatches.length === 1) return acc.banco;
+      return acc.banco;
     }
   }
 
