@@ -71,27 +71,47 @@ export function detectBank(text: string): string {
   return "Desconocido";
 }
 
+export function detectBankOrigen(text: string): string | null {
+  // "Instrumento origen: 0102***9577" — extrae prefijo del instrumento origen
+  const origenInstrumento = text.match(/instrumento\s+origen[:\s]+(0[01]\d{2})/i);
+  if (origenInstrumento && ACCOUNT_PREFIX_MAP[origenInstrumento[1]]) {
+    return ACCOUNT_PREFIX_MAP[origenInstrumento[1]];
+  }
+  return null;
+}
+
 export function detectBankDestino(text: string): string | null {
-  // Buscar cuenta destino con prefijo (ej: 0134-xxxx o 01340000...)
-  const accountMatch = text.match(/\b(0[01]\d{2})[- ]?\d{4}/);
-  if (accountMatch) {
-    const prefix = accountMatch[1];
-    if (ACCOUNT_PREFIX_MAP[prefix]) return ACCOUNT_PREFIX_MAP[prefix];
+  // 1. "Instrumento destino: 0114****65327" — los primeros 4 dígitos = banco destino
+  const instrumentoDestino = text.match(/instrumento\s+destino[:\s]+(0[01]\d{2})/i);
+  if (instrumentoDestino) {
+    const banco = ACCOUNT_PREFIX_MAP[instrumentoDestino[1]];
+    if (banco) return banco;
   }
 
-  // Buscar patrones explícitos de banco destino
+  // 2. "Banco: BANCARIBE" — aparece en BDV junto al instrumento destino
+  const bancoExplicito = text.match(/^banco[:\s]+([A-Za-záéíóúñÁÉÍÓÚÑ\s]+?)$/im);
+  if (bancoExplicito) {
+    const found = detectBankFromName(bancoExplicito[1].trim());
+    if (found) return found;
+  }
+
+  // 3. Número de cuenta completo con prefijo en cualquier parte del texto
+  const accountMatch = text.match(/\b(0[01]\d{2})[\*\d]{4,}/);
+  if (accountMatch) {
+    const banco = ACCOUNT_PREFIX_MAP[accountMatch[1]];
+    if (banco) return banco;
+  }
+
+  // 4. Patrones explícitos de banco destino
   const destinoPatterns = [
     /banco\s+destino[:\s]+([A-Za-záéíóúñÁÉÍÓÚÑ\s]+?)(?:\n|$|,)/i,
     /destino[:\s]+([A-Za-záéíóúñÁÉÍÓÚÑ\s]+?)(?:\n|$|,)/i,
     /hacia\s+([A-Za-záéíóúñÁÉÍÓÚÑ\s]+?)(?:\n|$|,)/i,
   ];
-
   for (const pattern of destinoPatterns) {
     const m = text.match(pattern);
     if (m) {
-      const candidato = m[1].trim();
-      // Verificar que el candidato coincida con algún banco conocido
-      const found = detectBankFromName(candidato);
+      const found = detectBankFromName(m[1].trim());
       if (found) return found;
     }
   }

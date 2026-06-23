@@ -1,5 +1,5 @@
 import { PaymentData } from "@/types/payment";
-import { detectBank, detectBankDestino } from "../bankDetector";
+import { detectBank, detectBankDestino, detectBankOrigen } from "../bankDetector";
 
 function extractMonto(text: string): { monto: string; detectado: boolean } {
   // USD → convertir indicando que es USD (no tenemos tasa, devolvemos el valor con nota)
@@ -81,7 +81,8 @@ export function parseGeneric(text: string): PaymentData {
   const { concepto, detectado: conceptoDetectado } = extractConcepto(text);
 
   const destinoBanco = detectBankDestino(text);
-  const bancoOrigen = detectBank(text);
+  // Instrumento origen tiene prioridad sobre keyword detector
+  const bancoOrigen = detectBankOrigen(text) ?? detectBank(text);
 
   return {
     bancoOrigen,
