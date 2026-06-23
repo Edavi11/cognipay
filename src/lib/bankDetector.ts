@@ -22,7 +22,7 @@ const BANK_KEYWORDS: Record<string, string[]> = {
   "Banco Caroní": ["caroni", "caroní"],
 };
 
-const ACCOUNT_PREFIX_MAP: Record<string, string> = {
+export const ACCOUNT_PREFIX_MAP: Record<string, string> = {
   "0102": "Banco de Venezuela",
   "0104": "Venezolano de Crédito",
   "0105": "Mercantil",
@@ -114,7 +114,14 @@ export function detectBankDestino(text: string): string | null {
     if (maskedPattern.test(text)) return acc.banco;
   }
 
-  // 4. "Instrumento destino: 0114****65327" — prefijo del instrumento
+  // 4. "Cuenta a acreditar: 0172-..." — Bancamiga y otros
+  const cuentaAcreditar = text.match(/cuenta\s+a\s+acreditar[:\s]+\(?(0[01]\d{2})/i);
+  if (cuentaAcreditar) {
+    const banco = ACCOUNT_PREFIX_MAP[cuentaAcreditar[1]];
+    if (banco) return banco;
+  }
+
+  // "Instrumento destino: 0114****65327" — prefijo del instrumento
   const instrumentoDestino = text.match(/instrumento\s+destino[:\s]+(0[01]\d{2})/i);
   if (instrumentoDestino) {
     const banco = ACCOUNT_PREFIX_MAP[instrumentoDestino[1]];
