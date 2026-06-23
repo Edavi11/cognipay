@@ -82,21 +82,34 @@ export function detectBankOrigen(text: string): string | null {
 }
 
 export function detectBankDestino(text: string): string | null {
-  // Normaliza el texto eliminando guiones y espacios entre dígitos para comparar cuentas
   const textNorm = text.replace(/[\s\-]/g, "");
 
-  // 1. Cruzar con cuentas de la empresa — si el número de cuenta aparece en el texto
-  //    significa que el pago viene hacia una de las cuentas propias
+  // 1. Cruzar con cuentas de la empresa
+  //    Soporta: cuenta completa, sufijo de 10 dígitos, y sufijo enmascarado de 4 dígitos
+  //    Ej Banesco: "Número de cuenta ****8955" → últimos 4 de 0134-0031-85-0311158955
   for (const acc of companyAccounts) {
     const cuentaNorm = acc.cuenta.replace(/[\s\-]/g, "");
-    // Comparar sufijos parciales (últimos 10 dígitos) para tolerar cuentas enmascaradas
-    const sufijo = cuentaNorm.slice(-10);
-    if (textNorm.includes(cuentaNorm) || textNorm.includes(sufijo)) {
+
+    // Cuenta completa o sufijo de 10 dígitos
+    const sufijo10 = cuentaNorm.slice(-10);
+    if (textNorm.includes(cuentaNorm) || textNorm.includes(sufijo10)) {
       return acc.banco;
     }
-    // Comparar prefijo de banco explícito en el texto
-    if (text.match(new RegExp(acc.cuenta_formateada.replace(/[-]/g, "[\\-\\s]?"), "i"))) {
-      return acc.banco;
+
+    // Sufijo enmascarado de 4 dígitos: "****8955" o "* * * * 8 9 5 5"
+    const sufijo4 = cuentaNorm.slice(-4);
+    const maskedPattern = new RegExp(`\\*{2,4}\\s*${sufijo4}`, "i");
+    if (maskedPattern.test(text)) {
+      // Asegurarse de que aparece bajo "número de cuenta" y no en "desde mi cuenta"
+      const cuentaDestinoMatch = text.match(
+        /n[uú]mero\s+de\s+cuenta[^\n]*\n([^\n]+)/i
+      );
+      if (cuentaDestinoMatch && cuentaDestinoMatch[1].includes(sufijo4)) {
+        return acc.banco;
+      }
+      // Si no hay contexto claro, igual lo usamos si solo hay una coincidencia
+      const allMatches = [...text.matchAll(new RegExp(`\\*{2,4}\\s*${sufijo4}`, "gi"))];
+      if (allMatches.length === 1) return acc.banco;
     }
   }
 
