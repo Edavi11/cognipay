@@ -16,10 +16,12 @@ export default function PaymentScanner() {
   const [progressMsg, setProgressMsg] = useState("");
   const [result, setResult] = useState<PaymentData | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
 
   const handleImage = useCallback(async (file: File) => {
     setImageUrl(URL.createObjectURL(file));
+    setImageFile(file);
     setErrorMsg("");
     setProgress(0);
 
@@ -67,6 +69,7 @@ export default function PaymentScanner() {
     setState("idle");
     setResult(null);
     setImageUrl(null);
+    setImageFile(null);
     setProgress(0);
     setProgressMsg("");
     setErrorMsg("");
@@ -87,7 +90,7 @@ export default function PaymentScanner() {
 
       {state === "done" && result && (
         <>
-          <PaymentResult data={result} imageUrl={imageUrl} />
+          <PaymentResult data={result} imageUrl={imageUrl} imageFile={imageFile} />
           <button
             onClick={handleReset}
             className="w-full py-3 rounded-xl border-2 border-blue-600 text-blue-600 font-semibold text-base active:scale-95 transition-transform"

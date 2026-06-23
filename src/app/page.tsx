@@ -1,20 +1,19 @@
-import PaymentScanner from "@/components/PaymentScanner";
+export const dynamic = "force-dynamic";
 
-export default function Home() {
+import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+import PaymentScanner from "@/components/PaymentScanner";
+import AppHeader from "@/components/AppHeader";
+
+export default async function Home() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) redirect("/login");
+
   return (
     <main className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      <header className="bg-blue-600 text-white px-4 py-4 shadow-md safe-top">
-        <div className="max-w-lg mx-auto flex items-center gap-3">
-          <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center text-lg">
-            💳
-          </div>
-          <div>
-            <h1 className="text-lg font-bold leading-none">CogniPay</h1>
-            <p className="text-blue-100 text-xs mt-0.5">Lector de comprobantes</p>
-          </div>
-        </div>
-      </header>
-
+      <AppHeader userEmail={user.email ?? ""} />
       <div className="max-w-lg mx-auto px-4 py-6">
         <PaymentScanner />
       </div>

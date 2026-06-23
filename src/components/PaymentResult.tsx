@@ -2,15 +2,18 @@
 
 import { useState } from "react";
 import { PaymentData } from "@/types/payment";
+import FeedbackModal from "./FeedbackModal";
 
 interface Props {
   data: PaymentData;
   imageUrl: string | null;
+  imageFile: File | null;
 }
 
-export default function PaymentResult({ data, imageUrl }: Props) {
+export default function PaymentResult({ data, imageUrl, imageFile }: Props) {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [edited, setEdited] = useState<PaymentData>(data);
+  const [showFeedback, setShowFeedback] = useState(false);
 
   const copy = async (text: string, field: string) => {
     if (text.startsWith("S/")) return;
@@ -155,6 +158,22 @@ export default function PaymentResult({ data, imageUrl }: Props) {
       >
         {copiedField === "all" ? "✅ ¡Copiado!" : "📋 Copiar todo"}
       </button>
+
+      {/* Reportar error */}
+      <button
+        onClick={() => setShowFeedback(true)}
+        className="w-full py-3 rounded-xl border-2 border-red-200 dark:border-red-900 text-red-500 dark:text-red-400 font-semibold text-sm active:scale-95 transition-transform flex items-center justify-center gap-2"
+      >
+        ⚠️ Reportar extracción incorrecta
+      </button>
+
+      {showFeedback && (
+        <FeedbackModal
+          data={edited}
+          imageFile={imageFile}
+          onClose={() => setShowFeedback(false)}
+        />
+      )}
 
       {/* Imagen original */}
       {imageUrl && (
