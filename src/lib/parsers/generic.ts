@@ -1,90 +1,100 @@
-import { PaymentData, PaymentType, Currency } from "@/types/payment";
-import { detectBank } from "../bankDetector";
+import { PaymentData } from "@/types/payment";
+import { detectBank, detectBankDestino } from "../bankDetector";
 
-function extractMonto(text: string): { monto?: string; moneda: Currency } {
-  // USD patterns
-  const usdMatch = text.match(/\$\s*([\d.,]+)|USD\s*([\d.,]+)|([\d.,]+)\s*USD/i);
+function extractMonto(text: string): { monto: string; detectado: boolean } {
+  // USD → convertir indicando que es USD (no tenemos tasa, devolvemos el valor con nota)
+  const usdMatch = text.match(/\$\s*([\d.,]+)|([\d.,]+)\s*\$|USD\s*([\d.,]+)|([\d.,]+)\s*USD/i);
   if (usdMatch) {
-    const val = usdMatch[1] || usdMatch[2] || usdMatch[3];
-    return { monto: val?.replace(",", "."), moneda: "USD" };
+    const val = (usdMatch[1] || usdMatch[2] || usdMatch[3] || usdMatch[4])?.replace(/\s/g, "");
+    return { monto: `${val} USD`, detectado: true };
   }
 
-  // Bolivares patterns
+  // Bs con símbolo
   const bsMatch = text.match(/Bs\.?\s*([\d.,]+)|([\d.,]+)\s*Bs\.?/i);
   if (bsMatch) {
-    const val = bsMatch[1] || bsMatch[2];
-    return { monto: val, moneda: "Bs" };
+    const val = (bsMatch[1] || bsMatch[2])?.replace(/\s/g, "");
+    return { monto: `Bs. ${val}`, detectado: true };
   }
 
-  // Generic large number (likely monto)
-  const montoMatch = text.match(/(?:monto|total|importe)[:\s]+([\d.,]+)/i);
-  if (montoMatch) return { monto: montoMatch[1], moneda: "Bs" };
+  // Palabra clave monto/total
+  const kwMatch = text.match(/(?:monto|total|importe)[:\s]+([\d.,]+)/i);
+  if (kwMatch) {
+    return { monto: `Bs. ${kwMatch[1]}`, detectado: true };
+  }
 
-  return { moneda: "desconocido" };
+  return { monto: "S/M", detectado: false };
 }
 
-function extractReferencia(text: string): string | undefined {
+function extractReferencia(text: string): { ref: string; detectado: boolean } {
   const patterns = [
-    /(?:n[uú]mero\s+de\s+)?(?:referencia|ref\.?|comprobante|confirmaci[oó]n|operaci[oó]n)[:\s#]+([A-Z0-9\-]{6,20})/i,
+    /(?:n[uú]mero\s+de\s+)?(?:referencia|ref\.?|comprobante|confirmaci[oó]n|operaci[oó]n|n[uú]mero)[:\s#]+([A-Z0-9\-]{6,20})/i,
     /\b([0-9]{8,20})\b/,
   ];
   for (const p of patterns) {
     const m = text.match(p);
-    if (m) return m[1].trim();
+    if (m?.[1]) return { ref: m[1].trim(), detectado: true };
   }
-  return undefined;
+  return { ref: "S/R", detectado: false };
 }
 
-function extractFecha(text: string): { fecha?: string; hora?: string } {
-  // DD/MM/YYYY or DD-MM-YYYY
-  const fechaMatch = text.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
-  // HH:MM or HH:MM:SS
-  const horaMatch = text.match(/(\d{1,2}:\d{2}(?::\d{2})?(?:\s*[APap][Mm])?)/);
+function extractFecha(text: string): { fecha: string; detectado: boolean } {
+  // DD/MM/YYYY o DD-MM-YYYY
+  const m = text.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+  if (m) {
+    const [, d, mo, y] = m;
+    const year = y.length === 2 ? `20${y}` : y;
+    return {
+      fecha: `${d.padStart(2, "0")}/${mo.padStart(2, "0")}/${year}`,
+      detectado: true,
+    };
+  }
 
-  return {
-    fecha: fechaMatch ? fechaMatch[0] : undefined,
-    hora: horaMatch ? horaMatch[1].trim() : undefined,
+  // Fecha en texto: "22 de junio de 2026"
+  const MESES: Record<string, string> = {
+    enero: "01", febrero: "02", marzo: "03", abril: "04", mayo: "05", junio: "06",
+    julio: "07", agosto: "08", septiembre: "09", octubre: "10", noviembre: "11", diciembre: "12",
   };
+  const textoMatch = text.match(/(\d{1,2})\s+de\s+([a-záéíóú]+)\s+de\s+(\d{4})/i);
+  if (textoMatch) {
+    const mes = MESES[textoMatch[2].toLowerCase()];
+    if (mes) {
+      return {
+        fecha: `${textoMatch[1].padStart(2, "0")}/${mes}/${textoMatch[3]}`,
+        detectado: true,
+      };
+    }
+  }
+
+  return { fecha: "S/F", detectado: false };
 }
 
-function extractTelefono(text: string): string | undefined {
-  const m = text.match(/(?:04[012456789][0-9][-\s]?[0-9]{3}[-\s]?[0-9]{4})/);
-  return m ? m[0].replace(/[\s\-]/g, "") : undefined;
-}
-
-function extractCedula(text: string): string | undefined {
-  const m = text.match(/[VEve]-?\s*(\d{6,9})/);
-  return m ? m[0].replace(/\s/g, "") : undefined;
-}
-
-function detectTipo(text: string): PaymentType {
-  const lower = text.toLowerCase();
-  if (lower.includes("pago m") || lower.includes("pago movil") || lower.includes("pago móvil")) return "pago_movil";
-  if (lower.includes("transferencia")) return "transferencia";
-  if (lower.includes("zelle")) return "zelle";
-  if (lower.includes("dep") && lower.includes("sito")) return "deposito";
-  return "desconocido";
+function extractConcepto(text: string): { concepto: string; detectado: boolean } {
+  const m = text.match(/(?:concepto|descripci[oó]n|motivo|por)[:\s]+([^\n]{3,80})/i);
+  if (m) return { concepto: m[1].trim(), detectado: true };
+  return { concepto: "S/C", detectado: false };
 }
 
 export function parseGeneric(text: string): PaymentData {
-  const { monto, moneda } = extractMonto(text);
-  const { fecha, hora } = extractFecha(text);
-  const referencia = extractReferencia(text);
-  const telefono = extractTelefono(text);
-  const cedula = extractCedula(text);
+  const { monto, detectado: montoDetectado } = extractMonto(text);
+  const { ref: referencia, detectado: referenciaDetectada } = extractReferencia(text);
+  const { fecha, detectado: fechaDetectada } = extractFecha(text);
+  const { concepto, detectado: conceptoDetectado } = extractConcepto(text);
 
-  const conceptoMatch = text.match(/(?:concepto|descripci[oó]n|motivo)[:\s]+([^\n]+)/i);
+  const destinoBanco = detectBankDestino(text);
+  const bancoOrigen = detectBank(text);
 
   return {
-    banco: detectBank(text),
-    tipo: detectTipo(text),
+    bancoOrigen,
+    bancoDestino: destinoBanco ?? "S/D",
+    bancoDestinoDetectado: destinoBanco !== null,
     referencia,
-    fecha,
-    hora,
+    referenciaDetectada,
     monto,
-    moneda,
-    emisor: { telefono, cedula },
-    concepto: conceptoMatch ? conceptoMatch[1].trim() : undefined,
+    montoDetectado,
+    fecha,
+    fechaDetectada,
+    concepto,
+    conceptoDetectado,
     rawText: text,
   };
 }

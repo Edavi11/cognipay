@@ -1,23 +1,14 @@
-export type PaymentType = "pago_movil" | "transferencia" | "zelle" | "deposito" | "desconocido";
-export type Currency = "Bs" | "USD" | "desconocido";
-
-export interface PaymentParty {
-  nombre?: string;
-  cedula?: string;
-  telefono?: string;
-  banco?: string;
-}
-
 export interface PaymentData {
-  banco: string;
-  tipo: PaymentType;
-  referencia?: string;
-  fecha?: string;
-  hora?: string;
-  monto?: string;
-  moneda: Currency;
-  emisor?: PaymentParty;
-  receptor?: PaymentParty;
-  concepto?: string;
+  bancoOrigen: string;
+  bancoDestino: string;
+  bancoDestinoDetectado: boolean;
+  referencia: string;
+  referenciaDetectada: boolean;
+  monto: string;
+  montoDetectado: boolean;
+  fecha: string;
+  fechaDetectada: boolean;
+  concepto: string;
+  conceptoDetectado: boolean;
   rawText?: string;
 }

@@ -5,9 +5,14 @@ export function parseMercantil(text: string): PaymentData {
   const base = parseGeneric(text);
 
   // Mercantil usa código de confirmación alfanumérico
-  const refMerc = text.match(/(?:c[oó]digo|confirmaci[oó]n)[:\s]+([A-Z0-9]{6,15})/i);
-  if (refMerc) base.referencia = refMerc[1];
+  if (!base.referenciaDetectada) {
+    const m = text.match(/(?:c[oó]digo|confirmaci[oó]n)[:\s]+([A-Z0-9]{6,15})/i);
+    if (m) {
+      base.referencia = m[1];
+      base.referenciaDetectada = true;
+    }
+  }
 
-  base.banco = "Mercantil";
+  base.bancoOrigen = "Mercantil";
   return base;
 }

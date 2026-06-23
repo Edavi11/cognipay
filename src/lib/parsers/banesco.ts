@@ -4,18 +4,15 @@ import { parseGeneric } from "./generic";
 export function parseBanesco(text: string): PaymentData {
   const base = parseGeneric(text);
 
-  // Banesco pago móvil: referencia de 9 dígitos
-  const refBanesco = text.match(/\b(\d{9})\b/);
-  if (refBanesco && !base.referencia) {
-    base.referencia = refBanesco[1];
+  // Banesco usa referencia de 9 dígitos cuando el parser genérico no la encontró
+  if (!base.referenciaDetectada) {
+    const m = text.match(/\b(\d{9})\b/);
+    if (m) {
+      base.referencia = m[1];
+      base.referenciaDetectada = true;
+    }
   }
 
-  // Nombre del receptor en pagos Banesco
-  const receptorMatch = text.match(/(?:beneficiario|receptor|a favor de)[:\s]+([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?: [A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){1,3})/i);
-  if (receptorMatch) {
-    base.receptor = { ...base.receptor, nombre: receptorMatch[1].trim() };
-  }
-
-  base.banco = "Banesco";
+  base.bancoOrigen = "Banesco";
   return base;
 }
