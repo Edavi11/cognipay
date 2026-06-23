@@ -1,0 +1,44 @@
+[
+  {
+    "banco": "Bancaribe",
+    "codigo": "0114",
+    "moneda": "Bs",
+    "cuenta": "01140172431720065327",
+    "cuenta_formateada": "0114-0172-43-1720065327"
+  },
+  {
+    "banco": "Banesco",
+    "codigo": "0134",
+    "moneda": "Bs",
+    "cuenta": "01340031850311158955",
+    "cuenta_formateada": "0134-0031-85-0311158955"
+  },
+  {
+    "banco": "Banco Nacional de Crédito",
+    "codigo": "0191",
+    "moneda": "Bs",
+    "cuenta": "01910154192100143533",
+    "cuenta_formateada": "0191-0154-19-2100143533"
+  },
+  {
+    "banco": "Mercantil",
+    "codigo": "0105",
+    "moneda": "Bs",
+    "cuenta": "01050026591026381223",
+    "cuenta_formateada": "0105-0026-59-1026381223"
+  },
+  {
+    "banco": "BBVA Provincial",
+    "codigo": "0108",
+    "moneda": "Bs",
+    "cuenta": "01080013770100140439",
+    "cuenta_formateada": "0108-0013-77-0100140439"
+  },
+  {
+    "banco": "Banco de Venezuela",
+    "codigo": "0102",
+    "moneda": "Bs",
+    "cuenta": "01020136550000002749",
+    "cuenta_formateada": "0102-0136-55-0000002749"
+  }
+]

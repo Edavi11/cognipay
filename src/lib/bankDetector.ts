@@ -1,4 +1,5 @@
 import banks from "../../banks.json";
+import companyAccounts from "../../company_accounts.json";
 
 const BANK_KEYWORDS: Record<string, string[]> = {
   "Banesco": ["banesco"],
@@ -81,28 +82,46 @@ export function detectBankOrigen(text: string): string | null {
 }
 
 export function detectBankDestino(text: string): string | null {
-  // 1. "Instrumento destino: 0114****65327" — los primeros 4 dígitos = banco destino
+  // Normaliza el texto eliminando guiones y espacios entre dígitos para comparar cuentas
+  const textNorm = text.replace(/[\s\-]/g, "");
+
+  // 1. Cruzar con cuentas de la empresa — si el número de cuenta aparece en el texto
+  //    significa que el pago viene hacia una de las cuentas propias
+  for (const acc of companyAccounts) {
+    const cuentaNorm = acc.cuenta.replace(/[\s\-]/g, "");
+    // Comparar sufijos parciales (últimos 10 dígitos) para tolerar cuentas enmascaradas
+    const sufijo = cuentaNorm.slice(-10);
+    if (textNorm.includes(cuentaNorm) || textNorm.includes(sufijo)) {
+      return acc.banco;
+    }
+    // Comparar prefijo de banco explícito en el texto
+    if (text.match(new RegExp(acc.cuenta_formateada.replace(/[-]/g, "[\\-\\s]?"), "i"))) {
+      return acc.banco;
+    }
+  }
+
+  // 2. "Instrumento destino: 0114****65327" — los primeros 4 dígitos = banco destino
   const instrumentoDestino = text.match(/instrumento\s+destino[:\s]+(0[01]\d{2})/i);
   if (instrumentoDestino) {
     const banco = ACCOUNT_PREFIX_MAP[instrumentoDestino[1]];
     if (banco) return banco;
   }
 
-  // 2. "Banco: BANCARIBE" — aparece en BDV junto al instrumento destino
+  // 3. "Banco: BANCARIBE" — aparece en BDV junto al instrumento destino
   const bancoExplicito = text.match(/^banco[:\s]+([A-Za-záéíóúñÁÉÍÓÚÑ\s]+?)$/im);
   if (bancoExplicito) {
     const found = detectBankFromName(bancoExplicito[1].trim());
     if (found) return found;
   }
 
-  // 3. Número de cuenta completo con prefijo en cualquier parte del texto
+  // 4. Número de cuenta con prefijo en cualquier parte del texto (puede estar enmascarado)
   const accountMatch = text.match(/\b(0[01]\d{2})[\*\d]{4,}/);
   if (accountMatch) {
     const banco = ACCOUNT_PREFIX_MAP[accountMatch[1]];
     if (banco) return banco;
   }
 
-  // 4. Patrones explícitos de banco destino
+  // 5. Patrones explícitos de banco destino en texto libre
   const destinoPatterns = [
     /banco\s+destino[:\s]+([A-Za-záéíóúñÁÉÍÓÚÑ\s]+?)(?:\n|$|,)/i,
     /destino[:\s]+([A-Za-záéíóúñÁÉÍÓÚÑ\s]+?)(?:\n|$|,)/i,
