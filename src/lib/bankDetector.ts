@@ -55,6 +55,17 @@ export const ACCOUNT_PREFIX_MAP: Record<string, string> = {
 export function detectBank(text: string): string {
   const lower = text.toLowerCase();
 
+  // Mercantil Tpago: el comprobante menciona el banco destino, no el origen
+  if (/\btpago\b/i.test(text) || /tu\s+tpago\s+fue\s+exitoso/i.test(text)) {
+    return "Mercantil";
+  }
+
+  // BNC pago móvil: "Cta. Corriente BNC:" identifica el banco origen como BNC
+  // Debe ir antes del loop porque "mercantil" o "banesco" pueden aparecer como banco destino
+  if (/cta\.\s*corriente\s+bnc\b/i.test(text) || /su\s+pago\s+m[oó]vil\s+ha\s+sido\s+ejecutado/i.test(text)) {
+    return "Banco Nacional de Crédito";
+  }
+
   for (const [bankName, keywords] of Object.entries(BANK_KEYWORDS)) {
     for (const kw of keywords) {
       if (lower.includes(kw)) return bankName;
@@ -72,10 +83,23 @@ export function detectBank(text: string): string {
 }
 
 export function detectBankOrigen(text: string): string | null {
+  // BNC pago móvil — debe ir primero porque "mercantil" o "banesco" pueden
+  // aparecer en el texto como banco destino del beneficiario
+  if (/cta\.\s*corriente\s+bnc\b/i.test(text) || /su\s+pago\s+m[oó]vil\s+ha\s+sido\s+ejecutado/i.test(text)) {
+    return "Banco Nacional de Crédito";
+  }
+
   const origenInstrumento = text.match(/instrumento\s+origen[:\s]+(0[01]\d{2})/i);
   if (origenInstrumento && ACCOUNT_PREFIX_MAP[origenInstrumento[1]]) {
     return ACCOUNT_PREFIX_MAP[origenInstrumento[1]];
   }
+
+  // BDV empresas: "Instrumento 0102***9577\norigen:"
+  const instrumentoAntesOrigen = text.match(/instrumento\s+(0[01]\d{2})[\*'"=\d\s]*\n\s*origen/i);
+  if (instrumentoAntesOrigen && ACCOUNT_PREFIX_MAP[instrumentoAntesOrigen[1]]) {
+    return ACCOUNT_PREFIX_MAP[instrumentoAntesOrigen[1]];
+  }
+
   return null;
 }
 
@@ -128,7 +152,57 @@ export function detectBankDestino(text: string): string | null {
     if (banco) return banco;
   }
 
-  // 5. "Banco: BANCARIBE" explícito
+  // BDV empresas: "Instrumento 0114****65377\ndestino:"
+  const instrumentoAntesDestino = text.match(/instrumento\s+(0[01]\d{2})[\*'"=\d\s]*\n\s*destino/i);
+  if (instrumentoAntesDestino) {
+    const banco = ACCOUNT_PREFIX_MAP[instrumentoAntesDestino[1]];
+    if (banco) return banco;
+  }
+
+  // Mercantil Tpago: "Banco destino:\n0102 - Banco De Venezuela..."
+  const bancoDestinoCodigo = text.match(/banco\s+destino[:\s]*\n?\s*(0[01]\d{2})\s*-\s*([^\n]+)/i);
+  if (bancoDestinoCodigo) {
+    const banco =
+      ACCOUNT_PREFIX_MAP[bancoDestinoCodigo[1]] ??
+      detectBankFromName(bancoDestinoCodigo[2].trim());
+    if (banco) return banco;
+  }
+
+  // 5a. "Banco: 0138 - BANCO PLAZA" — BDV PagomóvilBDV y similares
+  const bancoConCodigo = text.match(/^banco[:\s]+(0[01]\d{2})\s*-\s*([^\n]+)/im);
+  if (bancoConCodigo) {
+    const banco =
+      ACCOUNT_PREFIX_MAP[bancoConCodigo[1]] ??
+      detectBankFromName(bancoConCodigo[2].trim());
+    if (banco) return banco;
+  }
+
+  // 5b. Banesco/Banplus PagoMóvil: "BANCO RECEPTOR\nBANESCO BANCO UNIVERSAL"
+  const bancoReceptor = text.match(/banco\s+receptor[:\s]*\r?\n([^\n]+)/i);
+  if (bancoReceptor) {
+    const banco = detectBankFromName(bancoReceptor[1].trim());
+    if (banco) return banco;
+  }
+
+  // 5c. BNC pago móvil — beneficiario con código explícito: "- 0134 -\nBanesco"
+  const benefConCodigo = text.match(
+    /beneficiario[:\s]*\r?\n[^\n]+-\s*(0[01]\d{2})\s*-\s*\r?\n([^\n]+)/i
+  );
+  if (benefConCodigo) {
+    const banco =
+      ACCOUNT_PREFIX_MAP[benefConCodigo[1]] ??
+      detectBankFromName(benefConCodigo[2].trim());
+    if (banco) return banco;
+  }
+
+  // 5d. BNC pago móvil — beneficiario sin código, banco en línea siguiente: "- \nMERCANTIL"
+  const benefSinCodigo = text.match(/beneficiario[:\s]*\r?\n[^\n]+-\s*\r?\n([^\n]+)/i);
+  if (benefSinCodigo) {
+    const banco = detectBankFromName(benefSinCodigo[1].trim());
+    if (banco) return banco;
+  }
+
+  // 5e. "Banco: BANCARIBE" explícito (nombre sin código)
   const bancoExplicito = text.match(/^banco[:\s]+([A-Za-záéíóúñÁÉÍÓÚÑ\s]+?)$/im);
   if (bancoExplicito) {
     const found = detectBankFromName(bancoExplicito[1].trim());

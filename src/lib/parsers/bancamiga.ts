@@ -36,12 +36,18 @@ export function parseBancamiga(text: string): PaymentData {
   }
 
   // Concepto: Bancamiga lo llama "Concepto" pero el OCR lo destruye
-  // Búsqueda fuzzy: cualquier fragmento de "concepto" de al menos 4 letras
+  // Búsqueda fuzzy: variantes OCR como "oncentn", "Lali oncentn"
   if (!base.conceptoDetectado) {
-    const m = text.match(/(?:c[o0]nce?p?t[o0]?|oncepto|ncepto)[^a-z0-9\n]{0,5}[\s:;|]+([^\n]{2,80})/i);
+    const m = text.match(
+      /(?:c[o0]nce?p?t[o0]?|oncentn?|lali\s+oncentn?)[^a-z0-9\n]{0,8}[\s:;|=\-]+([^\n]{2,80})/i
+    );
     if (m) {
       // Limpia residuos OCR comunes: guiones, pipes, espacios múltiples
-      const concepto = m[1].replace(/[\|\-=]{2,}/g, "").replace(/\s{2,}/g, " ").trim();
+      const concepto = m[1]
+        .replace(/[\|\-=]{2,}/g, "")
+        .replace(/\s{2,}/g, " ")
+        .replace(/\b\d{3,}\b/g, "")
+        .trim();
       if (concepto.length >= 2) {
         base.concepto = concepto;
         base.conceptoDetectado = true;

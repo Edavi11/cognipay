@@ -5,6 +5,7 @@ import { parseBanesco } from "./parsers/banesco";
 import { parseBDV } from "./parsers/bdv";
 import { parseMercantil } from "./parsers/mercantil";
 import { parseBancamiga } from "./parsers/bancamiga";
+import { parseBNC } from "./parsers/bnc";
 
 export function parsePayment(text: string): PaymentData {
   const bank = detectBank(text);
@@ -13,6 +14,7 @@ export function parsePayment(text: string): PaymentData {
   if (bank === "Banco de Venezuela") return parseBDV(text);
   if (bank === "Mercantil") return parseMercantil(text);
   if (bank === "Bancamiga") return parseBancamiga(text);
+  if (bank === "Banco Nacional de Crédito") return parseBNC(text);
 
   return parseGeneric(text);
 }

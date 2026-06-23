@@ -1,4 +1,5 @@
 import { PaymentData } from "@/types/payment";
+import { detectBankDestino } from "../bankDetector";
 import { parseGeneric } from "./generic";
 
 export function parseMercantil(text: string): PaymentData {
@@ -32,6 +33,18 @@ export function parseMercantil(text: string): PaymentData {
     }
   }
 
+  // Banco destino: Tpago "Banco destino:\n0102 - Banco De Venezuela..."
+  if (!base.bancoDestinoDetectado) {
+    const destinoTpago = text.match(/banco\s+destino[:\s]*\n?\s*(0[01]\d{2})\s*-\s*([^\n]+)/i);
+    if (destinoTpago) {
+      const banco = detectBankDestino(`banco destino: ${destinoTpago[1]} - ${destinoTpago[2]}`);
+      if (banco) {
+        base.bancoDestino = banco;
+        base.bancoDestinoDetectado = true;
+      }
+    }
+  }
+
   // Banco destino desde beneficiario: "Reinco*1223" → sufijo *1223
   // El asterisco separa el nombre del sufijo de cuenta
   if (!base.bancoDestinoDetectado) {
@@ -42,7 +55,6 @@ export function parseMercantil(text: string): PaymentData {
       const sufijoCuenta = benefLine.match(/\*(\d{4})/);
       if (sufijoCuenta) {
         const sufijo = sufijoCuenta[1];
-        const { detectBankDestino } = require("../bankDetector");
         // Inyecta un texto simulado con el sufijo para que el detector lo encuentre
         const fakeText = `NÚMERO DE CUENTA ****${sufijo}`;
         const banco = detectBankDestino(fakeText);
