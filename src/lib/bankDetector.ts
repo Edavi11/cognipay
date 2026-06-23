@@ -1,6 +1,5 @@
 import banks from "../../banks.json";
 import companyAccounts from "../../company_accounts.json";
-import companyConfig from "../../company_config.json";
 
 const BANK_KEYWORDS: Record<string, string[]> = {
   "Banesco": ["banesco"],
@@ -80,15 +79,6 @@ export function detectBankOrigen(text: string): string | null {
   return null;
 }
 
-/** Verifica si el beneficiario en el texto es la empresa receptora (ej. REINCO) */
-function isBeneficiarioEmpresa(text: string): boolean {
-  const lower = text.toLowerCase();
-  // Busca el bloque de beneficiario
-  const benefBlock = text.match(/beneficiario[:\s\n]+([\s\S]{0,200}?)(?:\n[A-ZÁÉÍÓÚÑ\s]{5,}\n|$)/i);
-  const zona = (benefBlock ? benefBlock[1] : text).toLowerCase();
-
-  return companyConfig.keywords_beneficiario.some((kw) => zona.includes(kw.toLowerCase()));
-}
 
 export function detectBankDestino(text: string): string | null {
   const textNorm = text.replace(/[\s\-]/g, "");
@@ -156,18 +146,6 @@ export function detectBankDestino(text: string): string | null {
     if (m) {
       const found = detectBankFromName(m[1].trim());
       if (found) return found;
-    }
-  }
-
-  // 8. FALLBACK: el beneficiario es la empresa Y el banco de origen tiene cuenta en la empresa
-  //    Ej: Banesco transfiere a REINCO → REINCO tiene cuenta en Banesco → destino = Banesco
-  if (isBeneficiarioEmpresa(text)) {
-    const bancoOrigen = detectBankOrigen(text) ?? detectBankFromName(lower);
-    if (bancoOrigen) {
-      const cuentaEnBanco = companyAccounts.find(
-        (acc) => acc.banco.toLowerCase() === bancoOrigen.toLowerCase()
-      );
-      if (cuentaEnBanco) return cuentaEnBanco.banco;
     }
   }
 

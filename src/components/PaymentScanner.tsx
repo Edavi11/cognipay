@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
-import { createWorker } from "tesseract.js";
+import { useState, useCallback } from "react";
+import { createWorker, PSM } from "tesseract.js";
 import { parsePayment } from "@/lib/parsePayment";
+import { preprocessImage } from "@/lib/imagePreprocess";
 import { PaymentData } from "@/types/payment";
 import ImageUploader from "./ImageUploader";
 import PaymentResult from "./PaymentResult";
 
-type ScanState = "idle" | "processing" | "done" | "error";
+type ScanState = "idle" | "preprocessing" | "processing" | "done" | "error";
 
 export default function PaymentScanner() {
   const [state, setState] = useState<ScanState>("idle");
@@ -19,11 +20,19 @@ export default function PaymentScanner() {
 
   const handleImage = useCallback(async (file: File) => {
     setImageUrl(URL.createObjectURL(file));
-    setState("processing");
-    setProgress(0);
     setErrorMsg("");
+    setProgress(0);
 
     try {
+      // Paso 1: preprocesar imagen
+      setState("preprocessing");
+      setProgressMsg("Mejorando calidad de imagen...");
+      const processedBlob = await preprocessImage(file);
+
+      // Paso 2: OCR con Tesseract
+      setState("processing");
+      setProgressMsg("Iniciando OCR...");
+
       const worker = await createWorker("spa+eng", 1, {
         logger: (m) => {
           if (m.status === "recognizing text") {
@@ -35,13 +44,20 @@ export default function PaymentScanner() {
         },
       });
 
-      const { data } = await worker.recognize(file);
+      // PSM 6: bloque uniforme de texto — mejor para comprobantes con estructura tabular
+      // PSM.SINGLE_BLOCK (6): bloque uniforme de texto — mejor para comprobantes con estructura tabular
+      await worker.setParameters({
+        tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
+      });
+
+      const { data } = await worker.recognize(processedBlob);
       await worker.terminate();
 
       const parsed = parsePayment(data.text);
       setResult(parsed);
       setState("done");
-    } catch {
+    } catch (err) {
+      console.error(err);
       setErrorMsg("No se pudo procesar la imagen. Intenta con una foto más nítida.");
       setState("error");
     }
@@ -58,12 +74,15 @@ export default function PaymentScanner() {
 
   return (
     <div className="space-y-4">
-      {state === "idle" && (
-        <ImageUploader onImage={handleImage} />
-      )}
+      {state === "idle" && <ImageUploader onImage={handleImage} />}
 
-      {state === "processing" && (
-        <ProcessingView progress={progress} message={progressMsg} imageUrl={imageUrl} />
+      {(state === "preprocessing" || state === "processing") && (
+        <ProcessingView
+          state={state}
+          progress={progress}
+          message={progressMsg}
+          imageUrl={imageUrl}
+        />
       )}
 
       {state === "done" && result && (
@@ -96,26 +115,55 @@ export default function PaymentScanner() {
   );
 }
 
-function ProcessingView({ progress, message, imageUrl }: { progress: number; message: string; imageUrl: string | null }) {
+function ProcessingView({
+  state,
+  progress,
+  message,
+  imageUrl,
+}: {
+  state: ScanState;
+  progress: number;
+  message: string;
+  imageUrl: string | null;
+}) {
+  const isPreprocessing = state === "preprocessing";
+
   return (
     <div className="space-y-4">
       {imageUrl && (
         <div className="rounded-xl overflow-hidden border border-gray-200">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={imageUrl} alt="Comprobante" className="w-full object-contain max-h-56 opacity-60" />
+          <img
+            src={imageUrl}
+            alt="Comprobante"
+            className="w-full object-contain max-h-56 opacity-60"
+          />
         </div>
       )}
       <div className="bg-white dark:bg-gray-900 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-800 text-center space-y-4">
-        <div className="text-3xl animate-pulse">🔍</div>
-        <p className="font-semibold text-gray-800 dark:text-gray-100">Procesando comprobante...</p>
-        <p className="text-sm text-gray-500 capitalize">{message || "Iniciando OCR..."}</p>
-        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
-          <div
-            className="bg-blue-600 h-3 rounded-full transition-all duration-300"
-            style={{ width: `${progress}%` }}
-          />
+        <div className={`text-3xl ${isPreprocessing ? "animate-bounce" : "animate-pulse"}`}>
+          {isPreprocessing ? "🔧" : "🔍"}
         </div>
-        <p className="text-sm font-medium text-blue-600">{progress}%</p>
+        <p className="font-semibold text-gray-800 dark:text-gray-100">
+          {isPreprocessing ? "Preparando imagen..." : "Procesando comprobante..."}
+        </p>
+        <p className="text-sm text-gray-500 capitalize">{message}</p>
+
+        {isPreprocessing ? (
+          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
+            <div className="bg-blue-400 h-3 rounded-full animate-pulse w-1/2 mx-auto" />
+          </div>
+        ) : (
+          <>
+            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
+              <div
+                className="bg-blue-600 h-3 rounded-full transition-all duration-300"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <p className="text-sm font-medium text-blue-600">{progress}%</p>
+          </>
+        )}
       </div>
     </div>
   );
