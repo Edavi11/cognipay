@@ -4,12 +4,53 @@ import { parseGeneric } from "./generic";
 export function parseMercantil(text: string): PaymentData {
   const base = parseGeneric(text);
 
-  // Mercantil usa código de confirmación alfanumérico
+  // Referencia: "Nro. de referencia:\n0047900083890"
   if (!base.referenciaDetectada) {
-    const m = text.match(/(?:c[oó]digo|confirmaci[oó]n)[:\s]+([A-Z0-9]{6,15})/i);
+    const m = text.match(/nro\.?\s*de\s*referencia[:\s]*\n?\s*([0-9]{6,20})/i);
     if (m) {
-      base.referencia = m[1];
+      base.referencia = m[1].trim();
       base.referenciaDetectada = true;
+    }
+  }
+
+  // Fecha: "Fecha y hora de envio:\n22/6/2026 ..."
+  if (!base.fechaDetectada) {
+    const m = text.match(/fecha[^:\n]*:[:\s]*\n?\s*(\d{1,2}\/\d{1,2}\/\d{4})/i);
+    if (m) {
+      const [d, mo, y] = m[1].split("/");
+      base.fecha = `${d.padStart(2, "0")}/${mo.padStart(2, "0")}/${y}`;
+      base.fechaDetectada = true;
+    }
+  }
+
+  // Concepto: "Concepto:\nReinco 178397"
+  if (!base.conceptoDetectado) {
+    const m = text.match(/concepto[:\s]*\n?\s*([^\n]{2,80})/i);
+    if (m) {
+      base.concepto = m[1].trim();
+      base.conceptoDetectado = true;
+    }
+  }
+
+  // Banco destino desde beneficiario: "Reinco*1223" → sufijo *1223
+  // El asterisco separa el nombre del sufijo de cuenta
+  if (!base.bancoDestinoDetectado) {
+    const benefMatch = text.match(/beneficiario[:\s]*\n?\s*([^\n]+)/i);
+    if (benefMatch) {
+      const benefLine = benefMatch[1];
+      // Extrae sufijo después de * : "Reinco*1223" → "1223"
+      const sufijoCuenta = benefLine.match(/\*(\d{4})/);
+      if (sufijoCuenta) {
+        const sufijo = sufijoCuenta[1];
+        const { detectBankDestino } = require("../bankDetector");
+        // Inyecta un texto simulado con el sufijo para que el detector lo encuentre
+        const fakeText = `NÚMERO DE CUENTA ****${sufijo}`;
+        const banco = detectBankDestino(fakeText);
+        if (banco) {
+          base.bancoDestino = banco;
+          base.bancoDestinoDetectado = true;
+        }
+      }
     }
   }
 

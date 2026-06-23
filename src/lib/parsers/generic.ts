@@ -2,24 +2,30 @@ import { PaymentData } from "@/types/payment";
 import { detectBank, detectBankDestino, detectBankOrigen } from "../bankDetector";
 
 function extractMonto(text: string): { monto: string; detectado: boolean } {
-  // USD → convertir indicando que es USD (no tenemos tasa, devolvemos el valor con nota)
+  // USD en la misma línea
   const usdMatch = text.match(/\$\s*([\d.,]+)|([\d.,]+)\s*\$|USD\s*([\d.,]+)|([\d.,]+)\s*USD/i);
   if (usdMatch) {
     const val = (usdMatch[1] || usdMatch[2] || usdMatch[3] || usdMatch[4])?.replace(/\s/g, "");
     return { monto: `${val} USD`, detectado: true };
   }
 
-  // Bs con símbolo
-  const bsMatch = text.match(/Bs\.?\s*([\d.,]+)|([\d.,]+)\s*Bs\.?/i);
-  if (bsMatch) {
-    const val = (bsMatch[1] || bsMatch[2])?.replace(/\s/g, "");
+  // "Monto (Bs.):\n162.416,44" — label con paréntesis, valor en línea siguiente (Mercantil)
+  const bsLabelNextLine = text.match(/monto\s*\(bs\.?\)[:\s]*\n\s*([\d.,]+)/i);
+  if (bsLabelNextLine) {
+    return { monto: `Bs. ${bsLabelNextLine[1].trim()}`, detectado: true };
+  }
+
+  // "BS 245.300,00" o "Bs. 162.416,44" en la misma línea
+  const bsInline = text.match(/Bs\.?\s*([\d.,]+)|([\d.,]+)\s*Bs\.?/i);
+  if (bsInline) {
+    const val = (bsInline[1] || bsInline[2])?.replace(/\s/g, "");
     return { monto: `Bs. ${val}`, detectado: true };
   }
 
-  // Palabra clave monto/total
-  const kwMatch = text.match(/(?:monto|total|importe)[:\s]+([\d.,]+)/i);
+  // Keyword monto/total seguido de valor (misma línea o siguiente)
+  const kwMatch = text.match(/(?:monto|total|importe)[:\s]+\n?\s*([\d.,]+)/i);
   if (kwMatch) {
-    return { monto: `Bs. ${kwMatch[1]}`, detectado: true };
+    return { monto: `Bs. ${kwMatch[1].trim()}`, detectado: true };
   }
 
   return { monto: "S/M", detectado: false };
